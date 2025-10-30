@@ -3,7 +3,7 @@
 
 import json
 import pandas as pd  # type: ignore[import-untyped]
-from datasets import load_from_disk, load_dataset  # type: ignore[import-untyped]
+from datasets import load_from_disk, load_dataset  # type: ignore[import-not-found,import-untyped]
 
 
 def escape_format_braces(text):

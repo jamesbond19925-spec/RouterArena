@@ -82,7 +82,9 @@ class ModelEvaluator:
         self.cached_results_dir = cached_results_dir
         self.all_data: Optional[List[Dict[str, Any]]] = None
         self.dataset_configs: Dict[str, Dict[str, Any]] = {}
-        self.existing_results: Dict[str, Any] = {}  # Store existing results for incremental evaluation
+        self.existing_results: Dict[
+            str, Any
+        ] = {}  # Store existing results for incremental evaluation
         self.cost_config: Dict[str, Any] = {}  # Store cost configuration
 
         # Load dataset configurations
@@ -96,7 +98,7 @@ class ModelEvaluator:
         print("Loading ground truth data...")
         try:
             # Load data directly without LiveCodeBench dependency
-            from datasets import load_dataset  # type: ignore[import-untyped]
+            from datasets import load_dataset  # type: ignore[import-not-found,import-untyped]
             import pandas as pd  # type: ignore[import-untyped]
 
             # Load the router eval benchmark dataset

@@ -12,7 +12,7 @@ import warnings
 from zoneinfo import ZoneInfo
 import datetime
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 from main_utils import set_logger, lock_seed
 
 # Suppress the specific langchain warning
@@ -40,7 +40,9 @@ def setup_environment() -> tuple[str, str]:
     return current_dir, base_dir
 
 
-def setup_logging_and_seed(current_dir: str, model_name: str) -> tuple[logging.Logger, int]:
+def setup_logging_and_seed(
+    current_dir: str, model_name: str
+) -> tuple[logging.Logger, int]:
     """Set up logging and seed for reproducible results."""
     SEED = 42
     lock_seed(SEED)

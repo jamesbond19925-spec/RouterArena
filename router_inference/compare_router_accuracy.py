@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: Copyright contributors to the RouterArena project
 # SPDX-License-Identifier: Apache-2.0
 
-from calendar import c
 from typing import Dict, Tuple, DefaultDict, Any
 import json
 import os
@@ -35,7 +34,9 @@ def build_complete_evaluation_dictionary() -> Dict[str, Dict[str, Tuple[float, f
     results_dir = "./cached_results2"
     cost_data = load_cost_data()
 
-    evaluation_dict: DefaultDict[str, Dict[Any, Tuple[float, float]]] = defaultdict(dict)
+    evaluation_dict: DefaultDict[str, Dict[Any, Tuple[float, float]]] = defaultdict(
+        dict
+    )
 
     # Get all evaluation result files
     if not os.path.exists(results_dir):
@@ -83,14 +84,26 @@ def build_complete_evaluation_dictionary() -> Dict[str, Dict[str, Tuple[float, f
                     token_usage = result["token_usage"]
                     if token_usage is None:
                         continue
-                    input_tokens = token_usage.get("input_tokens", token_usage.get("prompt_tokens", 0))
-                    output_tokens = token_usage.get("output_tokens", token_usage.get("completion_tokens", 0))
-                    
+                    input_tokens = token_usage.get(
+                        "input_tokens", token_usage.get("prompt_tokens", 0)
+                    )
+                    output_tokens = token_usage.get(
+                        "output_tokens", token_usage.get("completion_tokens", 0)
+                    )
+
                     if input_tokens and output_tokens:
-                        input_cost_per_million = cost_data[model_name]["input_token_price_per_million"]
-                        output_cost_per_million = cost_data[model_name]["output_token_price_per_million"]
-                        
-                        inference_cost = (input_tokens / 1_000_000) * input_cost_per_million + (output_tokens / 1_000_000) * output_cost_per_million
+                        input_cost_per_million = cost_data[model_name][
+                            "input_token_price_per_million"
+                        ]
+                        output_cost_per_million = cost_data[model_name][
+                            "output_token_price_per_million"
+                        ]
+
+                        inference_cost = (
+                            input_tokens / 1_000_000
+                        ) * input_cost_per_million + (
+                            output_tokens / 1_000_000
+                        ) * output_cost_per_million
 
                 # Get accuracy (score)
                 accuracy = result["evaluation_result"]["score"]
@@ -216,7 +229,7 @@ def main():
         "routellm",
         "routerbench_knn",
         "routerbench_mlp",
-        "RouterDC"
+        "RouterDC",
     ]
 
     all_router_data = {}

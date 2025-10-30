@@ -31,7 +31,8 @@ run_mypy() {
     fi
 
     if [[ "$CI" -eq 1 ]]; then
-        # In CI, run mypy with full strictness.
+        # In CI, skip import checking to avoid heavy env deps
+        mypy_args+=(--ignore-missing-imports)
         mypy "${mypy_args[@]}" "$@" "$target"
     else
         # Local runs are a bit more lenient and skip heavy import following.

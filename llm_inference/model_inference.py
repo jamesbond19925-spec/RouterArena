@@ -10,7 +10,7 @@ import os
 import json
 import time
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from openai import OpenAI
 import tiktoken
 
@@ -110,7 +110,7 @@ class ModelInference:
             "error": "Inference did not return a result",
             "success": False,
             "token_usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
-            "provider": provider if 'provider' in locals() else "unknown",
+            "provider": provider if "provider" in locals() else "unknown",
             "model_used": model_name,
         }
 
@@ -310,8 +310,14 @@ class ModelInference:
 
         usage = getattr(response, "usage", None)
         input_tokens = getattr(usage, "prompt_tokens", 0) if usage is not None else 0
-        completion_tokens = getattr(usage, "completion_tokens", 0) if usage is not None else 0
-        total_tokens = getattr(usage, "total_tokens", 0) if usage is not None else input_tokens + completion_tokens
+        completion_tokens = (
+            getattr(usage, "completion_tokens", 0) if usage is not None else 0
+        )
+        total_tokens = (
+            getattr(usage, "total_tokens", 0)
+            if usage is not None
+            else input_tokens + completion_tokens
+        )
 
         return {
             "response": response.choices[0].message.content,
@@ -338,8 +344,14 @@ class ModelInference:
 
         usage = getattr(response, "usage", None)
         input_tokens = getattr(usage, "prompt_tokens", 0) if usage is not None else 0
-        completion_tokens = getattr(usage, "completion_tokens", 0) if usage is not None else 0
-        total_tokens = getattr(usage, "total_tokens", 0) if usage is not None else input_tokens + completion_tokens
+        completion_tokens = (
+            getattr(usage, "completion_tokens", 0) if usage is not None else 0
+        )
+        total_tokens = (
+            getattr(usage, "total_tokens", 0)
+            if usage is not None
+            else input_tokens + completion_tokens
+        )
 
         return {
             "response": response.choices[0].message.content,
@@ -370,8 +382,14 @@ class ModelInference:
 
         usage = getattr(response, "usage", None)
         input_tokens = getattr(usage, "prompt_tokens", 0) if usage is not None else 0
-        completion_tokens = getattr(usage, "completion_tokens", 0) if usage is not None else 0
-        total_tokens = getattr(usage, "total_tokens", 0) if usage is not None else input_tokens + completion_tokens
+        completion_tokens = (
+            getattr(usage, "completion_tokens", 0) if usage is not None else 0
+        )
+        total_tokens = (
+            getattr(usage, "total_tokens", 0)
+            if usage is not None
+            else input_tokens + completion_tokens
+        )
 
         return {
             "response": response.choices[0].message.content,
@@ -455,22 +473,32 @@ class ModelInference:
         clean_model_name = model_name.replace("mistral/", "")
 
         from typing import Any, cast
+
         response = client.chat.complete(
             model=clean_model_name,
-            messages=cast(Any, [
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-            ]),
+            messages=cast(
+                Any,
+                [
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    }
+                ],
+            ),
             max_tokens=2048,
             temperature=0.7,
         )
 
         usage = getattr(response, "usage", None)
         input_tokens = getattr(usage, "prompt_tokens", 0) if usage is not None else 0
-        completion_tokens = getattr(usage, "completion_tokens", 0) if usage is not None else 0
-        total_tokens = getattr(usage, "total_tokens", 0) if usage is not None else input_tokens + completion_tokens
+        completion_tokens = (
+            getattr(usage, "completion_tokens", 0) if usage is not None else 0
+        )
+        total_tokens = (
+            getattr(usage, "total_tokens", 0)
+            if usage is not None
+            else input_tokens + completion_tokens
+        )
 
         return {
             "response": response.choices[0].message.content,
@@ -506,8 +534,14 @@ class ModelInference:
 
         usage = getattr(response, "usage", None)
         input_tokens = getattr(usage, "prompt_tokens", 0) if usage is not None else 0
-        completion_tokens = getattr(usage, "completion_tokens", 0) if usage is not None else 0
-        total_tokens = getattr(usage, "total_tokens", 0) if usage is not None else input_tokens + completion_tokens
+        completion_tokens = (
+            getattr(usage, "completion_tokens", 0) if usage is not None else 0
+        )
+        total_tokens = (
+            getattr(usage, "total_tokens", 0)
+            if usage is not None
+            else input_tokens + completion_tokens
+        )
 
         return {
             "response": response.choices[0].message.content,
@@ -541,8 +575,14 @@ class ModelInference:
 
         usage = getattr(response, "usage", None)
         input_tokens = getattr(usage, "prompt_tokens", 0) if usage is not None else 0
-        completion_tokens = getattr(usage, "completion_tokens", 0) if usage is not None else 0
-        total_tokens = getattr(usage, "total_tokens", 0) if usage is not None else input_tokens + completion_tokens
+        completion_tokens = (
+            getattr(usage, "completion_tokens", 0) if usage is not None else 0
+        )
+        total_tokens = (
+            getattr(usage, "total_tokens", 0)
+            if usage is not None
+            else input_tokens + completion_tokens
+        )
 
         return {
             "response": response.choices[0].message.content,
@@ -576,8 +616,14 @@ class ModelInference:
 
         usage = getattr(response, "usage", None)
         input_tokens = getattr(usage, "prompt_tokens", 0) if usage is not None else 0
-        completion_tokens = getattr(usage, "completion_tokens", 0) if usage is not None else 0
-        total_tokens = getattr(usage, "total_tokens", 0) if usage is not None else input_tokens + completion_tokens
+        completion_tokens = (
+            getattr(usage, "completion_tokens", 0) if usage is not None else 0
+        )
+        total_tokens = (
+            getattr(usage, "total_tokens", 0)
+            if usage is not None
+            else input_tokens + completion_tokens
+        )
 
         return {
             "response": response.choices[0].message.content,

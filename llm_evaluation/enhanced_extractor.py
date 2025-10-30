@@ -221,7 +221,9 @@ class EnhancedAnswerExtractor:
 
         return None
 
-    def _extract_enhanced_answer(self, text: str, dataset: Optional[str] = None) -> Optional[str]:
+    def _extract_enhanced_answer(
+        self, text: str, dataset: Optional[str] = None
+    ) -> Optional[str]:
         """Extract answer using enhanced patterns"""
         # Special handling for LiveCodeBench
         if dataset == "LiveCodeBench":

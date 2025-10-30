@@ -6,12 +6,12 @@ import string
 import json
 import copy
 
-import jieba  # type: ignore[import-untyped]
-from fuzzywuzzy import fuzz  # type: ignore[import-untyped]
+import jieba  # type: ignore[import-not-found,import-untyped]
+from fuzzywuzzy import fuzz  # type: ignore[import-not-found,import-untyped]
 import difflib
 
 from collections import Counter
-from rouge import Rouge  # type: ignore[import-untyped]
+from rouge import Rouge  # type: ignore[import-not-found,import-untyped]
 import regex  # type: ignore[import-untyped]
 
 from metric_utils import (

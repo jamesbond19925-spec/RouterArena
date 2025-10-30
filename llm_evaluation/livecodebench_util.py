@@ -480,6 +480,7 @@ def reliability_guard(maximum_memory_bytes: Optional[int] = None):
     import builtins
 
     from typing import Any, cast
+
     builtins.exit = cast(Any, None)  # type: ignore[assignment]
     builtins.quit = cast(Any, None)  # type: ignore[assignment]
 
@@ -523,7 +524,6 @@ def reliability_guard(maximum_memory_bytes: Optional[int] = None):
 
     import subprocess
 
-    import builtins as _builtins  # local alias to avoid mypy confusion
     setattr(subprocess, "Popen", cast(Any, None))  # type: ignore[misc]
 
     # __builtins__["help"] = None   # this line is commented out as it results into error
