@@ -33,20 +33,22 @@ RouterArena addresses this gap by providing a uniform, multi-dimensional benchma
 
 <h3 align="left">RouterArena Leaderboard</h3>
 
-| Rank | Router | Affiliation | Type | Arena | Opt.Select | Opt.Cost | Opt.Acc | Latency | Robustness |
-|------|---------|--------------|--------|--------|------------|-----------|----------|----------|-------------|
-| 🥇 | MIRT-BERT | USTC | Academic | 0.6689 | 0.0344 | 0.1962 | 0.7818 | 0.2703 | 0.9450 |
-| 🥈 | Azure | Microsoft | Commercial | 0.6666 | 0.2252 | 0.4632 | 0.8196 | — | — |
-| 🥉 | NIRT-BERT | USTC | Academic | 0.6612 | 0.0383 | 0.1404 | 0.7788 | 0.1042 | 0.4450 |
-| 4 | GPT-5 | OpenAI | Commercial | 0.6432 | — | — | — | — | — |
-| 5 | vLLM-SR | vLLM | Commercial | 0.6432 | 0.0479 | 0.1254 | 0.7933 | 0.0019 | 1.0000 |
-| 6 | CARROT | UMich | Academic | 0.6387 | 0.0268 | 0.0677 | 0.7863 | 0.0150 | 0.9360 |
-| 7 | NotDiamond | NotDiamond | Commercial | 0.6300 | 0.0155 | 0.0214 | 0.7681 | — | — |
-| 8 | MLP | Academic | Academic | 0.5756 | 0.1339 | 0.2445 | 0.8332 | 0.9091 | 0.9690 |
-| 9 | GraphRouter | UIUC | Academic | 0.5722 | 0.0473 | 0.3833 | 0.7425 | 0.0270 | 0.9750 |
-| 10 | KNN | Academic | Academic | 0.5548 | 0.1309 | 0.2549 | 0.7877 | 0.0133 | 0.5130 |
-| 11 | RouteLLM | Berkeley | Academic | 0.4807 | 0.9972 | 0.9963 | 0.6876 | 0.0040 | 0.9980 |
-| 12 | RouterDC | SUSTech | Academic | 0.3375 | 0.3984 | 0.7300 | 0.4905 | 0.1075 | 0.9760 |
+| Rank | Router | Affiliation | Arena | Opt.Sel | Opt.Cost | Opt.Acc | Lat | Robust |
+|------|---------|--------------|--------|------------|-----------|----------|----------|-------------|
+| 🥇 | MIRT-BERT | 🟨 USTC | 66.89 | 3.44 | 19.62 | 78.18 | 27.03 | 94.50 |
+| 🥈 | Azure | 🟦&nbsp;Microsoft | 66.66 | 22.52 | 46.32 | 81.96 | — | — |
+| 🥉 | NIRT-BERT | 🟨 USTC | 66.12 | 3.83 | 14.04 | 77.88 | 10.42 | 44.50 |
+| 4 | GPT-5 | 🟦 OpenAI | 64.32 | — | — | — | — | — |
+| 5 | vLLM-SR | 🟦 vLLM | 64.32 | 4.79 | 12.54 | 79.33 | 0.19 | 100.00 |
+| 6 | CARROT | 🟨 UMich | 63.87 | 2.68 | 6.77 | 78.63 | 1.50 | 93.60 |
+| 7 | NotDiamond | 🟦&nbsp;NotDiamond | 63.00 | 1.55 | 2.14 | 76.81 | — | — |
+| 8 | MLP | 🟨 Academic | 57.56 | 13.39 | 24.45 | 83.32 | 90.91 | 96.90 |
+| 9 | GraphRouter | 🟨 UIUC | 57.22 | 4.73 | 38.33 | 74.25 | 2.70 | 97.50 |
+| 10 | KNN | 🟨 Academic | 55.48 | 13.09 | 25.49 | 78.77 | 1.33 | 51.30 |
+| 11 | RouteLLM | 🟨 Berkeley | 48.07 | 99.72 | 99.63 | 68.76 | 0.40 | 99.80 |
+| 12 | RouterDC | 🟨 SUSTech | 33.75 | 39.84 | 73.00 | 49.05 | 10.75 | 97.60 |
+
+🟨 Academic  🟦 Commercial 
 
 <!-- <p align="center">
   <img src="images/leaderboard.png" alt="Make GPU Sharing Flexible and Easy" width="500" />
