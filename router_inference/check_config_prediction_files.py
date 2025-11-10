@@ -108,6 +108,112 @@ def load_dataset(split: str) -> List[Dict[str, Any]]:
     return data
 
 
+def load_cost_config() -> Dict[str, Any]:
+    """
+    Load cost configuration from model_cost/cost.json.
+    Uses a canonical path relative to the project root.
+
+    Returns:
+        Dictionary mapping model names to cost configurations
+    """
+    # Get the project root directory (parent of router_inference/)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(script_dir)
+    cost_file_path = os.path.join(project_root, "model_cost", "cost.json")
+
+    if not os.path.exists(cost_file_path):
+        return {}
+
+    try:
+        with open(cost_file_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Warning: Could not load cost configuration from {cost_file_path}: {e}")
+        return {}
+
+
+def check_model_costs(
+    predictions: List[Dict[str, Any]], config: Dict[str, Any]
+) -> Tuple[bool, List[str]]:
+    """
+    Check that all models used in predictions have cost configurations.
+
+    Args:
+        predictions: List of prediction dictionaries
+        config: Configuration dictionary
+
+    Returns:
+        Tuple of (is_valid, list_of_errors)
+    """
+    errors = []
+    cost_config = load_cost_config()
+
+    if not cost_config:
+        errors.append(
+            "Cost configuration file (model_cost/cost.json) not found. "
+            "Cannot validate model costs."
+        )
+        return False, errors
+
+    # Get all unique models from predictions
+    used_models = set()
+    model_manager = ModelNameManager()
+
+    for prediction in predictions:
+        model_prediction = prediction.get("prediction")
+        if model_prediction:
+            used_models.add(model_prediction)
+
+    # Also include models from config
+    config_models = config.get("pipeline_params", {}).get("models", [])
+    for model in config_models:
+        used_models.add(model)
+
+    # Check each model has cost configuration
+    missing_costs = []
+    for model_name in used_models:
+        try:
+            # Convert to universal name for cost lookup
+            universal_name = model_manager.get_universal_name(model_name)
+
+            # Remove _batch suffix if present
+            cost_lookup_name = universal_name
+            if universal_name.endswith("_batch"):
+                cost_lookup_name = universal_name[:-6]
+
+            # Check if cost exists (exact match or partial match)
+            has_cost = False
+            if cost_lookup_name in cost_config:
+                has_cost = True
+            else:
+                # Try partial matches
+                for config_name in cost_config.keys():
+                    if (
+                        config_name in cost_lookup_name
+                        or cost_lookup_name in config_name
+                    ):
+                        has_cost = True
+                        break
+
+            if not has_cost:
+                missing_costs.append(f"{model_name} (universal: {cost_lookup_name})")
+        except Exception as e:
+            # If we can't convert, try original name
+            if model_name not in cost_config:
+                missing_costs.append(f"{model_name} (conversion failed: {str(e)})")
+
+    if missing_costs:
+        errors.append(f"Missing cost configuration for {len(missing_costs)} model(s):")
+        for model in missing_costs:
+            errors.append(f"  - {model}")
+        errors.append(
+            "\nPlease add cost configuration to model_cost/cost.json or update "
+            "your router config to use models with existing cost configurations."
+        )
+
+    return len(missing_costs) == 0, errors
+
+
 def check_config_models(config: Dict[str, Any]) -> Tuple[bool, List[str]]:
     """
     Check that all model names in config can be found in ModelNameManager.
@@ -168,6 +274,7 @@ def check_prediction_fields(
     predictions: List[Dict[str, Any]],
     dataset: List[Dict[str, Any]],
     valid_models: Set[str],
+    check_generated_result: bool = False,
 ) -> Tuple[bool, List[str]]:
     """
     Check that each prediction has correct fields matching the dataset.
@@ -270,6 +377,53 @@ def check_prediction_fields(
                     f"(also failed to convert: {str(e)})"
                 )
 
+        # Check generated_result - only if flag is enabled (for post-inference validation)
+        # This check is skipped by default since validation runs before inference
+        if check_generated_result:
+            generated_result = prediction.get("generated_result")
+            if generated_result is None:
+                errors.append(
+                    f"Entry {i} (global_index: {pred_global_index}): "
+                    f"missing generated_result (must be a dictionary). "
+                    f"Please run llm_inference/run.py first to generate model outputs."
+                )
+            elif not isinstance(generated_result, dict):
+                errors.append(
+                    f"Entry {i} (global_index: {pred_global_index}): "
+                    f"generated_result must be a dictionary, got {type(generated_result).__name__}"
+                )
+            else:
+                # Validate dictionary structure
+                required_fields = ["generated_answer", "success", "token_usage"]
+                missing_fields = [
+                    field for field in required_fields if field not in generated_result
+                ]
+                if missing_fields:
+                    errors.append(
+                        f"Entry {i} (global_index: {pred_global_index}): "
+                        f"generated_result dictionary missing required fields: {', '.join(missing_fields)}"
+                    )
+                elif not isinstance(generated_result.get("generated_answer"), str):
+                    errors.append(
+                        f"Entry {i} (global_index: {pred_global_index}): "
+                        f"generated_result.generated_answer must be a string"
+                    )
+                elif (
+                    generated_result.get("success", False)
+                    and not generated_result.get("generated_answer", "").strip()
+                ):
+                    # Only require non-empty generated_answer if success is True
+                    # Failed entries (success=False) may have empty generated_answer
+                    errors.append(
+                        f"Entry {i} (global_index: {pred_global_index}): "
+                        f"generated_result.generated_answer is empty but success is True"
+                    )
+                elif not isinstance(generated_result.get("success"), bool):
+                    errors.append(
+                        f"Entry {i} (global_index: {pred_global_index}): "
+                        f"generated_result.success must be a boolean"
+                    )
+
     return len(errors) == 0, errors
 
 
@@ -289,6 +443,12 @@ def main():
         choices=["sub_10", "full"],
         help="Dataset split: 'sub_10' for 10%% split (809 entries) or 'full' (8400 entries)",
     )
+    parser.add_argument(
+        "--check-generated-result",
+        action="store_true",
+        default=False,
+        help="Check that generated_result field is present and valid (for post-inference validation)",
+    )
 
     args = parser.parse_args()
 
@@ -303,6 +463,8 @@ def main():
 
     all_valid = True
     errors_summary = []
+    config = None  # Initialize config variable
+    predictions = None  # Initialize predictions variable
 
     # Check 1: Load and validate config
     print("\n[1] Checking config file...")
@@ -330,6 +492,7 @@ def main():
         all_valid = False
         errors_summary.append(f"Config error: {str(e)}")
         valid_models = set()
+        config = None
 
     # Check 2: Load and validate predictions
     print("\n[2] Checking prediction file...")
@@ -352,7 +515,7 @@ def main():
         print(f"✗ Error loading predictions: {e}")
         all_valid = False
         errors_summary.append(f"Predictions error: {str(e)}")
-        predictions = []
+        predictions = None
 
     # Check 3: Load dataset and validate fields
     print("\n[3] Checking prediction fields against dataset...")
@@ -360,9 +523,9 @@ def main():
         dataset = load_dataset(args.split)
         print(f"✓ Dataset loaded: {len(dataset)} entries")
 
-        if predictions and valid_models:
+        if predictions is not None and valid_models:
             fields_valid, field_errors = check_prediction_fields(
-                predictions, dataset, valid_models
+                predictions, dataset, valid_models, args.check_generated_result
             )
             if fields_valid:
                 print("✓ All prediction fields match dataset correctly")
@@ -380,6 +543,30 @@ def main():
         print(f"✗ Error loading dataset: {e}")
         all_valid = False
         errors_summary.append(f"Dataset error: {str(e)}")
+
+    # Check 4: Validate model costs
+    print("\n[4] Checking model cost configurations...")
+    try:
+        if predictions is not None and config is not None:
+            cost_valid, cost_errors = check_model_costs(predictions, config)
+            if cost_valid:
+                cost_config = load_cost_config()
+                print(
+                    f"✓ All models have cost configurations ({len(cost_config)} models in cost file)"
+                )
+            else:
+                print("✗ Missing cost configurations found:")
+                for error in cost_errors:
+                    print(f"  {error}")
+                all_valid = False
+                errors_summary.extend(cost_errors)
+        else:
+            print("⚠ Skipping cost check (predictions or config not loaded)")
+
+    except Exception as e:
+        print(f"✗ Error checking model costs: {e}")
+        all_valid = False
+        errors_summary.append(f"Cost check error: {str(e)}")
 
     # Final summary
     print("\n" + "=" * 80)

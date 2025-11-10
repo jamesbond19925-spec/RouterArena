@@ -30,6 +30,15 @@ from typing import Dict, Any, List, Optional
 # Add parent directory to path for imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
 
+# Load environment variables from .env file if it exists
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    # dotenv is optional
+    pass
+
 from universal_model_names import ModelNameManager
 
 # Import model evaluator from current directory
@@ -64,6 +73,21 @@ def compute_arena_score(cost, accuracy, beta=0.1, c_max=200, c_min=0.0044):
     float
         The computed RouterArena score S_i,β.
     """
+    # Validate inputs
+    if cost is None or cost <= 0:
+        raise ValueError(
+            f"Invalid cost value: {cost}. Cost must be positive. "
+            "This usually means no entries were evaluated (all entries skipped)."
+        )
+
+    if accuracy is None or accuracy < 0 or accuracy > 1:
+        raise ValueError(
+            f"Invalid accuracy value: {accuracy}. Accuracy must be between 0 and 1."
+        )
+
+    # Clamp cost to valid range for log2 calculation
+    cost = max(c_min, min(cost, c_max))
+
     # Compute normalized cost C_i
     C_i = (math.log2(c_max) - math.log2(cost)) / (math.log2(c_max) - math.log2(c_min))
 
@@ -119,7 +143,10 @@ def save_predictions_file(predictions: List[Dict[str, Any]], router_name: str) -
 
 def load_ground_truth_dataset(split: str) -> Dict[str, Dict[str, Any]]:
     """
-    Load ground truth dataset based on split from local disk.
+    Load ground truth dataset based on split from local disk or private repo.
+
+    For "full" split: If HF_TOKEN is available, loads from RouteWorks/RouterEvalBenchmark
+    (private repo with answers). Otherwise, loads from local disk (public dataset without answers).
 
     Args:
         split: Dataset split ("sub_10" for testing or "full" for submission)
@@ -127,31 +154,47 @@ def load_ground_truth_dataset(split: str) -> Dict[str, Dict[str, Any]]:
     Returns:
         Dictionary mapping global_index to ground truth data
     """
-    from datasets import load_from_disk  # type: ignore[import-not-found,import-untyped]
-    import pandas as pd  # type: ignore[import-untyped]
+    from datasets import load_dataset, load_from_disk
+    import pandas as pd
 
     if split not in ["sub_10", "full"]:
         raise ValueError(f"Invalid split: {split}. Must be 'sub_10' or 'full'")
 
-    logger.info(f"Loading ground truth dataset (split: {split}) from local disk...")
+    router_eval_bench_df = None
+    hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
 
-    # Load the RouterArena dataset from local disk
-    dataset_path = "./dataset/routerarena"
-    if split == "sub_10":
-        dataset_path = "./dataset/routerarena_10"
-    if not os.path.exists(dataset_path):
-        raise FileNotFoundError(
-            f"Dataset not found at {dataset_path}. "
-            f"Please run the following command to download the dataset: python scripts/process_datasets/prep_datasets.py"
+    # For "full" split, try private repo first if token is available
+    if split == "full" and hf_token:
+        logger.info("Loading full dataset with answers from private repo...")
+        try:
+            router_arena_dataset = load_dataset(
+                "RouteWorks/RouterEvalBenchmark",
+                split="full",
+                token=hf_token,
+            )
+            router_eval_bench_df = pd.DataFrame(router_arena_dataset)
+            logger.info("Successfully loaded from private repo.")
+        except Exception as e:
+            logger.warning(
+                f"Could not load from private repo: {e}. Falling back to local dataset."
+            )
+
+    # Load from local disk if not already loaded
+    if router_eval_bench_df is None:
+        dataset_path = (
+            "./dataset/routerarena_10" if split == "sub_10" else "./dataset/routerarena"
         )
+        if not os.path.exists(dataset_path):
+            raise FileNotFoundError(
+                f"Dataset not found at {dataset_path}. "
+                f"Please run: python scripts/process_datasets/prep_datasets.py"
+            )
+        logger.info(f"Loading dataset from {dataset_path}...")
+        router_arena_dataset = load_from_disk(dataset_path)
+        router_eval_bench_df = pd.DataFrame(router_arena_dataset)
 
-    router_arena_dataset = load_from_disk(dataset_path)
-
-    router_eval_bench_df = pd.DataFrame(router_arena_dataset)
-
-    # Check if we have answers for the "full" split
+    # Verify answers exist for "full" split
     if split == "full":
-        # Sample a few rows to check if answers are empty
         sample_size = min(100, len(router_eval_bench_df))
         sample_answers = router_eval_bench_df.head(sample_size)["Answer"]
         has_answers = any(
@@ -166,9 +209,11 @@ def load_ground_truth_dataset(split: str) -> Dict[str, Dict[str, Any]]:
             logger.error("")
             logger.error("To submit predictions for the full dataset evaluation:")
             logger.error("1. Generate predictions for the full dataset")
-            logger.error("2. Create an issue in the RouterArena repository")
-            logger.error("3. Upload your predictions file")
-            logger.error("4. We will run the official evaluation for you")
+            logger.error("2. Create a pull request to the RouterArena repository")
+            logger.error("3. Include your predictions file in the PR")
+            logger.error(
+                "4. The official evaluation would be automatically conducted for you"
+            )
             logger.error("=" * 80)
             raise ValueError(
                 "The 'full' split does not have ground truth answers. "
@@ -208,7 +253,7 @@ def get_livecodebench_ground_truth(global_index: str) -> Optional[Dict[str, Any]
     """
     global _livecodebench_cache
     try:
-        from datasets import load_from_disk  # type: ignore[import-not-found,import-untyped]
+        from datasets import load_from_disk
 
         # Load LiveCodeBench dataset (cache it if needed)
         if _livecodebench_cache is None:
@@ -328,7 +373,7 @@ def evaluate_single_prediction(
             # which works because code_accuracy accepts dict as ground_truth
             score, metric_name = evaluator._evaluate_single_entry(
                 generated_answer,
-                ground_truth,  # type: ignore[arg-type]
+                ground_truth,
                 scorer_func,
                 dataset_name,
             )
@@ -466,6 +511,23 @@ def compute_router_metrics(predictions: List[Dict[str, Any]], router_name: str) 
         if cost is not None and cost > 0:
             costs.append(cost)
             valid_cost_count += 1
+
+    # Check if any entries were evaluated
+    if not accuracies and not costs:
+        raise ValueError(
+            "No entries were evaluated. All prediction entries are missing 'generated_result' fields. "
+            "Please run llm_inference/run.py first to generate model outputs before evaluation."
+        )
+
+    if not accuracies:
+        raise ValueError(
+            "No entries have accuracy values. Cannot compute RouterArena score without accuracy data."
+        )
+
+    if not costs:
+        raise ValueError(
+            "No entries have valid cost values. Cannot compute RouterArena score without cost data."
+        )
 
     # Compute average accuracy
     avg_accuracy = sum(accuracies) / len(accuracies) if accuracies else 0.0
