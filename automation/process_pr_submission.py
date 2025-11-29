@@ -151,7 +151,7 @@ def cleanup_worktree(worktree_path: Path, branch_name: str, *, keep: bool) -> No
 def ensure_prediction_file_added(
     worktree_path: Path, base_ref: str, router_name: str
 ) -> None:
-    """Verify the PR adds a new prediction file for the specified router."""
+    """Verify the PR adds or modifies a prediction file for the specified router."""
 
     target_path = Path("router_inference") / "predictions" / f"{router_name}.json"
 
@@ -174,14 +174,20 @@ def ensure_prediction_file_added(
 
     lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
     for line in lines:
-        if line.startswith("A\t") or line.startswith("A "):
+        # Allow both added (A) and modified (M) files
+        if (
+            line.startswith("A\t")
+            or line.startswith("A ")
+            or line.startswith("M\t")
+            or line.startswith("M ")
+        ):
             return
 
     raise RuntimeError(
         textwrap.dedent(
             f"""
-            Expected pull request to add a new prediction file {target_path}.
-            Diff against {base_ref} did not show a newly added file.
+            Expected pull request to add or modify a prediction file {target_path}.
+            Diff against {base_ref} did not show a newly added or modified file.
             """
         ).strip()
     )

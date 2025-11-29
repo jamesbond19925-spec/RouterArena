@@ -28,21 +28,21 @@ jobs:
           # This ensures each router submission is evaluated independently
           BASE_REF="${{ github.event.pull_request.base.ref }}"
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          
+
           if [[ -z "$BASE_SHA" ]]; then
             echo "Error: Could not determine PR base SHA" >&2
             exit 1
           fi
-          
+
           # Fetch the base branch to ensure it's available for comparison
           git fetch origin "$BASE_REF" || true
-          
+
           # Try to fetch the specific base SHA if it's not already available
           if ! git cat-file -e "$BASE_SHA" 2>/dev/null; then
             echo "Base SHA $BASE_SHA not found locally, attempting to fetch..."
             git fetch origin "$BASE_SHA" || git fetch origin "$BASE_REF" || true
           fi
-          
+
           # For PRs from forks, we want to compare against the fork's base branch state
           # Use three-dot diff to show changes from merge-base to HEAD (only PR changes)
           # This isolates the evaluation to changes in this specific fork submission
@@ -78,7 +78,7 @@ jobs:
             SPLIT="sub_10"
           fi
           echo "split=$SPLIT" >> "$GITHUB_OUTPUT"
-          
+
           # Save the prediction file to temporary location for copying to main branch
           mkdir -p /tmp/pr_predictions
           cp "$PREDICTION_FILE" "/tmp/pr_predictions/${ROUTER_NAME}.json"
@@ -97,7 +97,7 @@ jobs:
           set -euo pipefail
           ROUTER_NAME="${{ steps.detect.outputs.router }}"
           mkdir -p "router_inference/predictions"
-          
+
           # Copy the prediction file that was saved in the previous step
           # Always use the PR's version, overwriting any existing file in main branch
           if [[ -f "/tmp/pr_predictions/${ROUTER_NAME}.json" ]]; then
@@ -116,7 +116,7 @@ jobs:
               exit 1
             fi
           fi
-          
+
           # Verify the file exists and has content
           if [[ ! -f "router_inference/predictions/${ROUTER_NAME}.json" ]]; then
             echo "Error: Prediction file was not copied successfully" >&2
