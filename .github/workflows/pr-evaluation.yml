@@ -13,9 +13,10 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - name: Checkout repository
+      - name: Checkout PR branch for file detection
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Detect changed prediction file
@@ -27,20 +28,25 @@ jobs:
           # This ensures each router submission is evaluated independently
           BASE_REF="${{ github.event.pull_request.base.ref }}"
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-
-          if [[ -z "$BASE_SHA" ]] || [[ -z "$HEAD_SHA" ]]; then
-            echo "Error: Could not determine PR base or head SHA" >&2
+          
+          if [[ -z "$BASE_SHA" ]]; then
+            echo "Error: Could not determine PR base SHA" >&2
             exit 1
           fi
-
-          # Fetch the base branch to ensure it's available
+          
+          # Fetch the base branch to ensure it's available for comparison
           git fetch origin "$BASE_REF" || true
-
+          
+          # Try to fetch the specific base SHA if it's not already available
+          if ! git cat-file -e "$BASE_SHA" 2>/dev/null; then
+            echo "Base SHA $BASE_SHA not found locally, attempting to fetch..."
+            git fetch origin "$BASE_SHA" || git fetch origin "$BASE_REF" || true
+          fi
+          
           # For PRs from forks, we want to compare against the fork's base branch state
           # Use three-dot diff to show changes from merge-base to HEAD (only PR changes)
           # This isolates the evaluation to changes in this specific fork submission
-          CHANGED_FILES=$(git diff --name-status "$BASE_SHA"..."$HEAD_SHA" -- router_inference/predictions/*.json | awk '$1 == "A" || $1 == "M" {print $2}')
+          CHANGED_FILES=$(git diff --name-status "$BASE_SHA"...HEAD -- router_inference/predictions/*.json 2>&1 | awk '$1 == "A" || $1 == "M" {print $2}')
           if [[ -z "$CHANGED_FILES" ]]; then
             echo "No changed prediction file detected; skipping evaluation."
             echo "router=" >> "$GITHUB_OUTPUT"
@@ -54,7 +60,7 @@ jobs:
           ROUTER_NAME=$(basename "$CHANGED_FILES" .json)
           echo "router=$ROUTER_NAME" >> "$GITHUB_OUTPUT"
 
-          # Detect split based on prediction file size
+          # Detect split based on prediction file size (from PR branch)
           PREDICTION_FILE="router_inference/predictions/${ROUTER_NAME}.json"
           if [[ ! -f "$PREDICTION_FILE" ]]; then
             echo "Error: Prediction file not found at $PREDICTION_FILE" >&2
@@ -72,6 +78,51 @@ jobs:
             SPLIT="sub_10"
           fi
           echo "split=$SPLIT" >> "$GITHUB_OUTPUT"
+          
+          # Save the prediction file to temporary location for copying to main branch
+          mkdir -p /tmp/pr_predictions
+          cp "$PREDICTION_FILE" "/tmp/pr_predictions/${ROUTER_NAME}.json"
+          echo "Saved prediction file to /tmp/pr_predictions/${ROUTER_NAME}.json"
+
+      - name: Checkout main branch for evaluation
+        if: ${{ steps.detect.outputs.router != '' }}
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Copy prediction file from PR branch
+        if: ${{ steps.detect.outputs.router != '' }}
+        run: |
+          set -euo pipefail
+          ROUTER_NAME="${{ steps.detect.outputs.router }}"
+          mkdir -p "router_inference/predictions"
+          
+          # Copy the prediction file that was saved in the previous step
+          # Always use the PR's version, overwriting any existing file in main branch
+          if [[ -f "/tmp/pr_predictions/${ROUTER_NAME}.json" ]]; then
+            cp -f "/tmp/pr_predictions/${ROUTER_NAME}.json" "router_inference/predictions/${ROUTER_NAME}.json"
+            echo "Successfully copied prediction file from PR branch (overwrote any existing file)"
+          else
+            # Fallback: try to fetch from PR branch directly
+            echo "Prediction file not in /tmp, attempting to fetch from PR branch..."
+            git fetch origin pull/${{ github.event.pull_request.number }}/head:pr-branch || true
+            PREDICTION_FILE="router_inference/predictions/${ROUTER_NAME}.json"
+            # Use -f flag to force overwrite if file exists
+            if git show pr-branch:"$PREDICTION_FILE" > "router_inference/predictions/${ROUTER_NAME}.json" 2>/dev/null; then
+              echo "Successfully retrieved prediction file from PR branch (overwrote any existing file)"
+            else
+              echo "Error: Could not retrieve prediction file from PR branch" >&2
+              exit 1
+            fi
+          fi
+          
+          # Verify the file exists and has content
+          if [[ ! -f "router_inference/predictions/${ROUTER_NAME}.json" ]]; then
+            echo "Error: Prediction file was not copied successfully" >&2
+            exit 1
+          fi
+          echo "Prediction file ready: router_inference/predictions/${ROUTER_NAME}.json"
 
       - name: Show detected router
         if: ${{ steps.detect.outputs.router != '' }}
