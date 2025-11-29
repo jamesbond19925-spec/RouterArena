@@ -396,6 +396,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             "llm_evaluation/run.py",
             args.router,
             args.split,
+            "--force",
         ]
 
         evaluation_logs = ""

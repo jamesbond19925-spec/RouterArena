@@ -359,7 +359,11 @@ def evaluate_single_prediction(
 
 
 def process_router_predictions(
-    router_name: str, split: str, save_interval: int = 50, num_workers: int = 4
+    router_name: str,
+    split: str,
+    save_interval: int = 50,
+    num_workers: int = 4,
+    force: bool = False,
 ) -> None:
     """
     Process router predictions by evaluating generated results with incremental saving.
@@ -370,6 +374,7 @@ def process_router_predictions(
         split: Dataset split ("sub_10" or "full")
         save_interval: Number of entries to process before saving (default: 50)
         num_workers: Number of worker threads for parallel processing (default: 4)
+        force: If True, re-evaluate all entries even if already evaluated (default: False)
     """
     logger.info(f"Starting LLM evaluation for router: {router_name} (split: {split})")
     logger.info(f"Using {num_workers} worker threads for parallel processing")
@@ -401,12 +406,13 @@ def process_router_predictions(
         "The dataset contains entries from LiveCodeBench, and it is common to wait for ~10 minutes to evaluate the sub_10 split of the dataset."
     )
 
-    # Prepare tasks: filter out already evaluated entries
+    # Prepare tasks: filter out already evaluated entries (unless force is True)
     # Note: This loop runs in the main thread before threading starts, so no lock needed
     tasks = []
     for i, prediction in enumerate(predictions):
         # Check if already evaluated (has accuracy and cost)
-        if (
+        # Skip if already evaluated AND force is False
+        if not force and (
             prediction.get("accuracy") is not None
             and prediction.get("cost") is not None
         ):
@@ -643,6 +649,12 @@ def main():
         default=8,
         help="Number of worker threads for parallel processing (default: 4). Set to 1 for sequential processing.",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Force re-evaluation of all entries, even if already evaluated (default: False)",
+    )
 
     args = parser.parse_args()
 
@@ -666,7 +678,7 @@ def main():
             args.save_interval if args.save_interval > 0 else len(predictions) + 1
         )
         process_router_predictions(
-            args.router_name, args.split, save_interval, args.num_workers
+            args.router_name, args.split, save_interval, args.num_workers, args.force
         )
     except KeyboardInterrupt:
         logger.info("\nInterrupted by user. Saving partial results...")

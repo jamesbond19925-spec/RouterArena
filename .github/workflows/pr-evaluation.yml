@@ -18,24 +18,40 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect new prediction file
+      - name: Detect changed prediction file
         id: detect
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin main
-          NEW_FILES=$(git diff --name-status origin/main...HEAD -- router_inference/predictions/*.json | awk '$1 == "A" {print $2}')
-          if [[ -z "$NEW_FILES" ]]; then
-            echo "No newly added prediction file detected; skipping evaluation."
+          # Compare against the fork's base branch (the branch the PR was created from)
+          # This ensures each router submission is evaluated independently
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          if [[ -z "$BASE_SHA" ]] || [[ -z "$HEAD_SHA" ]]; then
+            echo "Error: Could not determine PR base or head SHA" >&2
+            exit 1
+          fi
+
+          # Fetch the base branch to ensure it's available
+          git fetch origin "$BASE_REF" || true
+
+          # For PRs from forks, we want to compare against the fork's base branch state
+          # Use three-dot diff to show changes from merge-base to HEAD (only PR changes)
+          # This isolates the evaluation to changes in this specific fork submission
+          CHANGED_FILES=$(git diff --name-status "$BASE_SHA"..."$HEAD_SHA" -- router_inference/predictions/*.json | awk '$1 == "A" || $1 == "M" {print $2}')
+          if [[ -z "$CHANGED_FILES" ]]; then
+            echo "No changed prediction file detected; skipping evaluation."
             echo "router=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if [[ $(echo "$NEW_FILES" | wc -l) -ne 1 ]]; then
-            echo "Expected exactly one new prediction file, found:" >&2
-            echo "$NEW_FILES" >&2
+          if [[ $(echo "$CHANGED_FILES" | wc -l) -ne 1 ]]; then
+            echo "Expected exactly one changed prediction file, found:" >&2
+            echo "$CHANGED_FILES" >&2
             exit 1
           fi
-          ROUTER_NAME=$(basename "$NEW_FILES" .json)
+          ROUTER_NAME=$(basename "$CHANGED_FILES" .json)
           echo "router=$ROUTER_NAME" >> "$GITHUB_OUTPUT"
 
           # Detect split based on prediction file size
