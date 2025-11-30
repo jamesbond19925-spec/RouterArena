@@ -647,7 +647,7 @@ def main():
         "--num-workers",
         type=int,
         default=16,
-        help="Number of worker threads for parallel processing (default: 4). Set to 1 for sequential processing.",
+        help="Number of worker threads for parallel processing (default: 16). Set to 1 for sequential processing.",
     )
     parser.add_argument(
         "--force",

@@ -175,12 +175,7 @@ def ensure_prediction_file_added(
     lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
     for line in lines:
         # Allow both added (A) and modified (M) files
-        if (
-            line.startswith("A\t")
-            or line.startswith("A ")
-            or line.startswith("M\t")
-            or line.startswith("M ")
-        ):
+        if line[0] in ("A", "M"):
             return
 
     raise RuntimeError(
