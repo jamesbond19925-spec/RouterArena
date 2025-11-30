@@ -155,134 +155,39 @@ def ensure_prediction_file_added(
 
     target_path = Path("router_inference") / "predictions" / f"{router_name}.json"
 
-    # Check if the file exists in the PR branch (HEAD)
-    full_path = worktree_path / target_path
-    if not full_path.exists():
-        raise RuntimeError(
-            f"Prediction file {target_path} does not exist in PR branch."
-        )
+    diff_cmd = [
+        "git",
+        "diff",
+        "--name-status",
+        f"{base_ref}...HEAD",
+        "--",
+        str(target_path),
+    ]
 
-    # Try to check if base_ref exists in the worktree's git repository
-    base_ref_exists = False
-    try:
-        subprocess.run(
-            ["git", "cat-file", "-e", base_ref],
-            cwd=worktree_path,
-            check=True,
-            capture_output=True,
-        )
-        base_ref_exists = True
-    except subprocess.CalledProcessError:
-        # Base ref not found, try to fetch it from origin
-        try:
-            subprocess.run(
-                ["git", "fetch", "origin", base_ref],
-                cwd=worktree_path,
-                check=True,
-                capture_output=True,
-            )
-            # Verify it exists now
-            try:
-                subprocess.run(
-                    ["git", "cat-file", "-e", base_ref],
-                    cwd=worktree_path,
-                    check=True,
-                    capture_output=True,
-                )
-                base_ref_exists = True
-            except subprocess.CalledProcessError:
-                pass
-        except subprocess.CalledProcessError:
-            pass
+    completed = subprocess.run(
+        diff_cmd,
+        cwd=worktree_path,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
 
-    # If base_ref exists, use diff to check if file was added/modified
-    if base_ref_exists:
-        # Try three-dot diff first (shows changes from merge-base)
-        diff_cmd = [
-            "git",
-            "diff",
-            "--name-status",
-            f"{base_ref}...HEAD",
-            "--",
-            str(target_path),
-        ]
-
-        completed = subprocess.run(
-            diff_cmd,
-            cwd=worktree_path,
-            check=False,  # Don't fail if diff fails
-            text=True,
-            capture_output=True,
-        )
-
-        lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
-        for line in lines:
-            # Allow both added (A) and modified (M) files
-            if (
-                line.startswith("A\t")
-                or line.startswith("A ")
-                or line.startswith("M\t")
-                or line.startswith("M ")
-            ):
-                return
-
-        # If three-dot diff didn't work, try two-dot diff
-        diff_cmd = [
-            "git",
-            "diff",
-            "--name-status",
-            f"{base_ref}..HEAD",
-            "--",
-            str(target_path),
-        ]
-
-        completed = subprocess.run(
-            diff_cmd,
-            cwd=worktree_path,
-            check=False,
-            text=True,
-            capture_output=True,
-        )
-
-        lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
-        for line in lines:
-            if (
-                line.startswith("A\t")
-                or line.startswith("A ")
-                or line.startswith("M\t")
-                or line.startswith("M ")
-            ):
-                return
-
-        # If both diffs failed, check if file exists in base_ref
-        try:
-            subprocess.run(
-                ["git", "cat-file", "-e", f"{base_ref}:{target_path}"],
-                cwd=worktree_path,
-                check=True,
-                capture_output=True,
-            )
-            # File exists in base_ref, so it's a modification
-            return
-        except subprocess.CalledProcessError:
-            # File doesn't exist in base_ref, so it's an addition
-            # Since file exists in HEAD, this is valid
+    lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+    for line in lines:
+        # Allow both added (A) and modified (M) files
+        if (
+            line.startswith("A\t")
+            or line.startswith("A ")
+            or line.startswith("M\t")
+            or line.startswith("M ")
+        ):
             return
 
-    # If base_ref doesn't exist, we can't verify via diff
-    # But since the workflow already detected the file change, we'll accept it
-    # Just verify the file exists in the PR branch
-    if full_path.exists():
-        return
-
-    # Final fallback: if we can't verify via diff but file exists, accept it
-    # The workflow has already verified the file change
     raise RuntimeError(
         textwrap.dedent(
             f"""
-            Could not verify prediction file {target_path} was added or modified.
-            Base ref {base_ref} is not available in PR branch history.
-            File exists in PR branch: {full_path.exists()}
+            Expected pull request to add or modify a prediction file {target_path}.
+            Diff against {base_ref} did not show a newly added or modified file.
             """
         ).strip()
     )

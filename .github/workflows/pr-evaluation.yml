@@ -79,50 +79,23 @@ jobs:
           fi
           echo "split=$SPLIT" >> "$GITHUB_OUTPUT"
 
-          # Save the prediction file to temporary location for copying to main branch
-          mkdir -p /tmp/pr_predictions
-          cp "$PREDICTION_FILE" "/tmp/pr_predictions/${ROUTER_NAME}.json"
-          echo "Saved prediction file to /tmp/pr_predictions/${ROUTER_NAME}.json"
-
-      - name: Checkout main branch for evaluation
-        if: ${{ steps.detect.outputs.router != '' }}
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-
-      - name: Copy prediction file from PR branch
+      - name: Continue using PR branch for evaluation
         if: ${{ steps.detect.outputs.router != '' }}
         run: |
           set -euo pipefail
+          # We stay on the PR branch to use the code from the PR
+          # This allows the PR to include both router submissions AND code improvements
+          # The prediction file is already available from the detection step
           ROUTER_NAME="${{ steps.detect.outputs.router }}"
-          mkdir -p "router_inference/predictions"
-
-          # Copy the prediction file that was saved in the previous step
-          # Always use the PR's version, overwriting any existing file in main branch
-          if [[ -f "/tmp/pr_predictions/${ROUTER_NAME}.json" ]]; then
-            cp -f "/tmp/pr_predictions/${ROUTER_NAME}.json" "router_inference/predictions/${ROUTER_NAME}.json"
-            echo "Successfully copied prediction file from PR branch (overwrote any existing file)"
-          else
-            # Fallback: try to fetch from PR branch directly
-            echo "Prediction file not in /tmp, attempting to fetch from PR branch..."
-            git fetch origin pull/${{ github.event.pull_request.number }}/head:pr-branch || true
-            PREDICTION_FILE="router_inference/predictions/${ROUTER_NAME}.json"
-            # Use -f flag to force overwrite if file exists
-            if git show pr-branch:"$PREDICTION_FILE" > "router_inference/predictions/${ROUTER_NAME}.json" 2>/dev/null; then
-              echo "Successfully retrieved prediction file from PR branch (overwrote any existing file)"
-            else
-              echo "Error: Could not retrieve prediction file from PR branch" >&2
-              exit 1
-            fi
-          fi
+          PREDICTION_FILE="router_inference/predictions/${ROUTER_NAME}.json"
 
           # Verify the file exists and has content
-          if [[ ! -f "router_inference/predictions/${ROUTER_NAME}.json" ]]; then
-            echo "Error: Prediction file was not copied successfully" >&2
+          if [[ ! -f "$PREDICTION_FILE" ]]; then
+            echo "Error: Prediction file not found at $PREDICTION_FILE" >&2
             exit 1
           fi
-          echo "Prediction file ready: router_inference/predictions/${ROUTER_NAME}.json"
+          echo "Using PR branch for evaluation (includes both router submission and code changes)"
+          echo "Prediction file ready: $PREDICTION_FILE"
 
       - name: Show detected router
         if: ${{ steps.detect.outputs.router != '' }}
