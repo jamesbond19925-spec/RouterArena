@@ -262,10 +262,12 @@ def check_prediction_size(
     # Count only regular entries (exclude optimality entries for size check)
     regular_predictions = [p for p in predictions if not p.get("for_optimality", False)]
     actual_size = len(regular_predictions)
-    
+
     optimality_count = len(predictions) - actual_size
     if optimality_count > 0:
-        print(f"  Note: Found {optimality_count} optimality entries (excluded from size check)")
+        print(
+            f"  Note: Found {optimality_count} optimality entries (excluded from size check)"
+        )
 
     if actual_size != expected_size:
         return False, (
@@ -307,7 +309,7 @@ def check_prediction_fields(
         # Skip optimality entries - only validate regular entries
         if prediction.get("for_optimality", False):
             continue
-        
+
         # Check global_index
         pred_global_index = prediction.get("global index") or prediction.get(
             "global_index"
