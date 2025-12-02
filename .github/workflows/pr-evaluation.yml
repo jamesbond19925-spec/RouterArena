@@ -1,7 +1,7 @@
 name: Router Submission Evaluation
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
     paths:
       - "router_inference/predictions/**"
@@ -13,19 +13,27 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - name: Checkout PR branch for file detection
+      - name: Checkout base repository (for evaluation scripts)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          path: base
+          fetch-depth: 0
+
+      - name: Checkout PR branch (for prediction file only)
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
           fetch-depth: 0
 
       - name: Detect changed prediction file
         id: detect
         shell: bash
+        working-directory: pr
         run: |
           set -euo pipefail
-          # Compare against the fork's base branch (the branch the PR was created from)
-          # This ensures each router submission is evaluated independently
+          # Compare against the upstream base branch
           BASE_REF="${{ github.event.pull_request.base.ref }}"
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
 
@@ -43,9 +51,7 @@ jobs:
             git fetch origin "$BASE_SHA" || git fetch origin "$BASE_REF" || true
           fi
 
-          # For PRs from forks, we want to compare against the fork's base branch state
-          # Use three-dot diff to show changes from merge-base to HEAD (only PR changes)
-          # This isolates the evaluation to changes in this specific fork submission
+          # Compare against base to show only changes in this PR
           CHANGED_FILES=$(git diff --name-status "$BASE_SHA"...HEAD -- router_inference/predictions/*.json 2>&1 | awk '$1 == "A" || $1 == "M" {print $2}')
           if [[ -z "$CHANGED_FILES" ]]; then
             echo "No changed prediction file detected; skipping evaluation."
@@ -60,7 +66,7 @@ jobs:
           ROUTER_NAME=$(basename "$CHANGED_FILES" .json)
           echo "router=$ROUTER_NAME" >> "$GITHUB_OUTPUT"
 
-          # Detect split based on prediction file size (from PR branch)
+          # Detect split based on prediction file size (from PR)
           PREDICTION_FILE="router_inference/predictions/${ROUTER_NAME}.json"
           if [[ ! -f "$PREDICTION_FILE" ]]; then
             echo "Error: Prediction file not found at $PREDICTION_FILE" >&2
@@ -79,24 +85,6 @@ jobs:
           fi
           echo "split=$SPLIT" >> "$GITHUB_OUTPUT"
 
-      - name: Continue using PR branch for evaluation
-        if: ${{ steps.detect.outputs.router != '' }}
-        run: |
-          set -euo pipefail
-          # We stay on the PR branch to use the code from the PR
-          # This allows the PR to include both router submissions AND code improvements
-          # The prediction file is already available from the detection step
-          ROUTER_NAME="${{ steps.detect.outputs.router }}"
-          PREDICTION_FILE="router_inference/predictions/${ROUTER_NAME}.json"
-
-          # Verify the file exists and has content
-          if [[ ! -f "$PREDICTION_FILE" ]]; then
-            echo "Error: Prediction file not found at $PREDICTION_FILE" >&2
-            exit 1
-          fi
-          echo "Using PR branch for evaluation (includes both router submission and code changes)"
-          echo "Prediction file ready: $PREDICTION_FILE"
-
       - name: Show detected router
         if: ${{ steps.detect.outputs.router != '' }}
         run: |
@@ -106,21 +94,34 @@ jobs:
 
       - name: Prepare dataset
         if: ${{ steps.detect.outputs.router != '' }}
+        working-directory: base
         run: |
           set -euo pipefail
           # Prepare dataset from public repository
+          # Uses base repo's script (safe - not from PR)
           echo "Preparing dataset..."
           mkdir -p "${{ github.workspace }}/dataset"
           uv run python scripts/process_datasets/prep_datasets.py
 
+      - name: Copy PR prediction file to base workspace
+        if: ${{ steps.detect.outputs.router != '' }}
+        run: |
+          set -euo pipefail
+          ROUTER_NAME="${{ steps.detect.outputs.router }}"
+          # Copy prediction file from PR to base workspace
+          mkdir -p base/router_inference/predictions
+          cp "pr/router_inference/predictions/${ROUTER_NAME}.json" \
+             "base/router_inference/predictions/${ROUTER_NAME}.json"
+          echo "✅ Copied prediction file from PR to base workspace"
+
       - name: Evaluate submission
         if: ${{ steps.detect.outputs.router != '' }}
         id: evaluate
+        working-directory: base
         env:
           ROUTERARENA_DATASET_DIR: ${{ github.workspace }}/dataset
         run: |
           set -euo pipefail
-          # Use the PR's base branch SHA for comparison (fork's base, not upstream main)
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
           uv run python automation/process_pr_submission.py \
             --pr "${{ github.event.pull_request.number }}" \
@@ -145,22 +146,24 @@ jobs:
             comment += `**Router:** \`${{ steps.detect.outputs.router }}\`\n`;
             comment += `**Dataset Split:** \`${{ steps.detect.outputs.split }}\`\n\n`;
 
-            // Try to read metrics from file
+            // Try to read metrics from file (in base directory)
             try {
-              if (fs.existsSync('metrics.json')) {
-                const metrics = JSON.parse(fs.readFileSync('metrics.json', 'utf8'));
+              const metricsPath = path.join('base', 'metrics.json');
+              if (fs.existsSync(metricsPath)) {
+                const metrics = JSON.parse(fs.readFileSync(metricsPath, 'utf8'));
                 comment += '### Metrics\n\n';
                 comment += '| Metric | Value |\n';
                 comment += '|--------|-------|\n';
                 comment += `| **RouterArena Score** | ${metrics.arena_score.toFixed(4)} |\n`;
                 comment += `| **Accuracy** | ${(metrics.accuracy * 100).toFixed(2)}% |\n`;
                 comment += `| **Total Cost** | $${metrics.total_cost.toFixed(6)} |\n`;
-                comment += `| **Avg Cost per Query** | $${metrics.avg_cost_per_query.toFixed(6)} |\n`;
-                comment += `| **Avg Cost per 1K Queries** | $${metrics.avg_cost_per_1000.toFixed(4)} |\n`;
+                comment += `| **Avg Cost per Query** | ${metrics.avg_cost_per_query.toFixed(6)} |\n`;
+                comment += `| **Avg Cost per 1K Queries** | ${metrics.avg_cost_per_1000.toFixed(4)} |\n`;
                 comment += `| **Number of Queries** | ${metrics.num_queries} |\n`;
               } else {
                 // Fallback: try to parse from evaluation output
-                const output = fs.readFileSync('evaluation_output.txt', 'utf8');
+                const outputPath = path.join('base', 'evaluation_output.txt');
+                const output = fs.readFileSync(outputPath, 'utf8');
                 const metricsMatch = output.match(/Metrics:\s*(\{[\s\S]*?\})/);
                 if (metricsMatch) {
                   const metrics = JSON.parse(metricsMatch[1]);
@@ -184,9 +187,11 @@ jobs:
             comment += '\n---\n';
             comment += '*Evaluation completed by RouterArena automated workflow*';
 
-            github.rest.issues.createComment({
+            // Post comment to PR
+            await github.rest.issues.createComment({
               issue_number: context.payload.pull_request.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: comment
             });
+            console.log('✅ Successfully posted evaluation results as PR comment');
