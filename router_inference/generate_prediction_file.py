@@ -57,20 +57,47 @@ def load_dataset(split: str) -> List[Dict[str, Any]]:
 
 
 def generate_predictions(
-    dataset: List[Dict[str, Any]], router: BaseRouter
+    dataset: List[Dict[str, Any]], 
+    router: BaseRouter,
+    model_pool: List[str],
+    split: str,
+    include_optimality: bool = True
 ) -> List[Dict[str, Any]]:
     """
-    Generate predictions using the ExampleRouter.
+    Generate predictions using the router, including optimality entries for sub_10.
+
+    For full split:
+    - Generates 8400 regular entries
+    - For sub_10 queries within the full split, generates optimality entries for other models
 
     Args:
         dataset: List of dataset entries
-        router: ExampleRouter instance to use for predictions
+        router: Router instance to use for predictions
+        model_pool: List of all models in the router's pool
+        split: Dataset split ("sub_10" or "full")
+        include_optimality: Whether to include optimality entries (default: True)
 
     Returns:
-        List of prediction dictionaries
+        List of prediction dictionaries including optimality entries
     """
     predictions = []
 
+    # Load sub_10 indices to identify which entries need optimality calculations
+    sub10_indices = set()
+    if include_optimality:
+        try:
+            sub10_dataset = load_dataset("sub_10")
+            sub10_indices = {entry.get("global index") for entry in sub10_dataset}
+            print(f"  Loaded {len(sub10_indices)} sub_10 indices for optimality calculation")
+        except Exception as e:
+            print(f"  Warning: Could not load sub_10 dataset: {e}")
+            print(f"  Optimality entries will not be generated")
+            include_optimality = False
+
+    # Track selected models for sub_10 entries
+    sub10_selected_models = {}  # {global_index: (selected_model, prompt)}
+
+    # Generate regular entries for all queries
     for entry in dataset:
         global_index = entry.get("global index")
         prompt = entry.get("prompt_formatted") or entry.get("prompt")
@@ -81,6 +108,10 @@ def generate_predictions(
         # Use the router to get prediction (validation is handled by BaseRouter)
         selected_model = router.get_prediction(prompt)
 
+        # Track selected model for sub_10 entries (for optimality generation)
+        if global_index in sub10_indices:
+            sub10_selected_models[global_index] = (selected_model, prompt)
+
         # Create prediction entry
         prediction_entry = {
             "global index": global_index,
@@ -89,9 +120,35 @@ def generate_predictions(
             "generated_result": None,
             "cost": None,
             "accuracy": None,
+            "for_optimality": False,  # Regular entry
         }
 
         predictions.append(prediction_entry)
+
+    # Generate optimality entries for sub_10 queries
+    if include_optimality and sub10_selected_models:
+        print(f"\n  Generating optimality entries for {len(sub10_selected_models)} sub_10 queries...")
+        optimality_count = 0
+        
+        for global_index, (selected_model, prompt) in sub10_selected_models.items():
+            # Generate entries for all OTHER models in pool
+            other_models = [m for m in model_pool if m != selected_model]
+            
+            for model in other_models:
+                optimality_entry = {
+                    "global index": global_index,
+                    "prompt": prompt,
+                    "prediction": model,  # Other model, not the one router selected
+                    "generated_result": None,
+                    "cost": None,
+                    "accuracy": None,
+                    "for_optimality": True,  # Flag for optimality calculation
+                }
+                predictions.append(optimality_entry)
+                optimality_count += 1
+        
+        print(f"  Generated {optimality_count} optimality entries")
+        print(f"  Total entries: {len(predictions)} ({len(dataset)} regular + {optimality_count} optimality)")
 
     return predictions
 
@@ -131,6 +188,11 @@ def main():
         choices=["sub_10", "full"],
         help="Dataset split: 'sub_10' for 10%% split or 'full'",
     )
+    parser.add_argument(
+        "--no-optimality",
+        action="store_true",
+        help="Skip generating optimality entries (default: include optimality entries)",
+    )
 
     args = parser.parse_args()
 
@@ -152,19 +214,36 @@ def main():
     print(f"✓ Router initialized: {router.router_name}")
     print(f"  Available models: {', '.join(router.models)}")
 
+    # Load router config to get model pool
+    print("\n[2] Loading router config...")
+    config_path = f"./router_inference/config/{args.router_name}.json"
+
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = json.load(f)
+    model_pool = config.get("pipeline_params", {}).get("models", [])
+    print(f"✓ Model pool loaded: {len(model_pool)} models")
+    print(f"  Models: {', '.join(model_pool)}")
+
     # Load dataset
-    print("\n[2] Loading dataset...")
+    print("\n[3] Loading dataset...")
     dataset = load_dataset(args.split)
     print(f"✓ Dataset loaded: {len(dataset)} entries")
 
     # Generate predictions
-    print("\n[3] Generating predictions...")
-    predictions = generate_predictions(dataset, router)
-    print(f"✓ Generated {len(predictions)} predictions")
-    print("  Using ExampleRouter: cycling through models")
+    print("\n[4] Generating predictions...")
+    include_optimality = not args.no_optimality
+    if include_optimality:
+        print("  Including optimality entries for automatic optimality score calculation")
+    else:
+        print("  Skipping optimality entries (--no-optimality flag set)")
+    
+    predictions = generate_predictions(
+        dataset, router, model_pool, args.split, include_optimality
+    )
+    print(f"✓ Generated {len(predictions)} total entries")
 
     # Save predictions
-    print("\n[4] Saving predictions...")
+    print("\n[5] Saving predictions...")
     save_predictions(predictions, args.router_name)
 
     print("\n" + "=" * 80)
