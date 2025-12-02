@@ -57,11 +57,11 @@ def load_dataset(split: str) -> List[Dict[str, Any]]:
 
 
 def generate_predictions(
-    dataset: List[Dict[str, Any]], 
+    dataset: List[Dict[str, Any]],
     router: BaseRouter,
     model_pool: List[str],
     split: str,
-    include_optimality: bool = True
+    include_optimality: bool = True,
 ) -> List[Dict[str, Any]]:
     """
     Generate predictions using the router, including optimality entries for sub_10.
@@ -88,10 +88,12 @@ def generate_predictions(
         try:
             sub10_dataset = load_dataset("sub_10")
             sub10_indices = {entry.get("global index") for entry in sub10_dataset}
-            print(f"  Loaded {len(sub10_indices)} sub_10 indices for optimality calculation")
+            print(
+                f"  Loaded {len(sub10_indices)} sub_10 indices for optimality calculation"
+            )
         except Exception as e:
             print(f"  Warning: Could not load sub_10 dataset: {e}")
-            print(f"  Optimality entries will not be generated")
+            print("  Optimality entries will not be generated")
             include_optimality = False
 
     # Track selected models for sub_10 entries
@@ -127,13 +129,15 @@ def generate_predictions(
 
     # Generate optimality entries for sub_10 queries
     if include_optimality and sub10_selected_models:
-        print(f"\n  Generating optimality entries for {len(sub10_selected_models)} sub_10 queries...")
+        print(
+            f"\n  Generating optimality entries for {len(sub10_selected_models)} sub_10 queries..."
+        )
         optimality_count = 0
-        
+
         for global_index, (selected_model, prompt) in sub10_selected_models.items():
             # Generate entries for all OTHER models in pool
             other_models = [m for m in model_pool if m != selected_model]
-            
+
             for model in other_models:
                 optimality_entry = {
                     "global index": global_index,
@@ -146,9 +150,11 @@ def generate_predictions(
                 }
                 predictions.append(optimality_entry)
                 optimality_count += 1
-        
+
         print(f"  Generated {optimality_count} optimality entries")
-        print(f"  Total entries: {len(predictions)} ({len(dataset)} regular + {optimality_count} optimality)")
+        print(
+            f"  Total entries: {len(predictions)} ({len(dataset)} regular + {optimality_count} optimality)"
+        )
 
     return predictions
 
@@ -233,10 +239,12 @@ def main():
     print("\n[4] Generating predictions...")
     include_optimality = not args.no_optimality
     if include_optimality:
-        print("  Including optimality entries for automatic optimality score calculation")
+        print(
+            "  Including optimality entries for automatic optimality score calculation"
+        )
     else:
         print("  Skipping optimality entries (--no-optimality flag set)")
-    
+
     predictions = generate_predictions(
         dataset, router, model_pool, args.split, include_optimality
     )

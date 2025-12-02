@@ -259,12 +259,19 @@ def check_prediction_size(
     if expected_size is None:
         return False, f"Invalid split: {split}. Must be 'sub_10' or 'full'"
 
-    actual_size = len(predictions)
+    # Count only regular entries (exclude optimality entries for size check)
+    regular_predictions = [p for p in predictions if not p.get("for_optimality", False)]
+    actual_size = len(regular_predictions)
+    
+    optimality_count = len(predictions) - actual_size
+    if optimality_count > 0:
+        print(f"  Note: Found {optimality_count} optimality entries (excluded from size check)")
 
     if actual_size != expected_size:
         return False, (
             f"Prediction size mismatch: expected {expected_size} entries "
-            f"for split '{split}', got {actual_size}"
+            f"for split '{split}', got {actual_size} regular entries "
+            f"(total: {len(predictions)} including {optimality_count} optimality entries)"
         )
 
     return True, ""
@@ -297,6 +304,10 @@ def check_prediction_fields(
             dataset_map[global_index] = entry
 
     for i, prediction in enumerate(predictions):
+        # Skip optimality entries - only validate regular entries
+        if prediction.get("for_optimality", False):
+            continue
+        
         # Check global_index
         pred_global_index = prediction.get("global index") or prediction.get(
             "global_index"

@@ -231,7 +231,7 @@ def sync_dataset_into_worktree(worktree_path: Path) -> None:
 def compute_scores(prediction_file: Path) -> dict[str, float]:
     """
     Compute aggregate metrics from an evaluated prediction file.
-    
+
     Only uses regular entries (for_optimality=False) for RouterArena score.
     Optimality entries are excluded from arena_score calculation.
     """
@@ -244,12 +244,16 @@ def compute_scores(prediction_file: Path) -> dict[str, float]:
 
     # Filter to regular predictions only (exclude optimality entries)
     regular_predictions = [p for p in predictions if not p.get("for_optimality", False)]
-    
+
     accuracies = [
-        entry["accuracy"] for entry in regular_predictions if entry.get("accuracy") is not None
+        entry["accuracy"]
+        for entry in regular_predictions
+        if entry.get("accuracy") is not None
     ]
     costs = [
-        entry["cost"] for entry in regular_predictions if entry.get("cost") not in (None, 0)
+        entry["cost"]
+        for entry in regular_predictions
+        if entry.get("cost") not in (None, 0)
     ]
 
     avg_accuracy = sum(accuracies) / len(accuracies) if accuracies else 0.0
@@ -437,14 +441,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         metrics_path = prediction_file.parent / "../../metrics.json"
         if metrics_path.exists():
             print("\n✔ Reading metrics from metrics.json...")
-            with open(metrics_path, 'r') as f:
+            with open(metrics_path, "r") as f:
                 metrics = json.load(f)
-            
+
             # Display optimality scores if available
             if "optimality" in metrics:
                 opt = metrics["optimality"]
                 print("\n✔ Optimality scores:")
-                print(f"  Opt.Sel: {opt.get('opt_sel', 0):.4f} ({opt.get('opt_sel', 0)*100:.2f}%)")
+                print(
+                    f"  Opt.Sel: {opt.get('opt_sel', 0):.4f} ({opt.get('opt_sel', 0) * 100:.2f}%)"
+                )
                 print(f"  Opt.Cost: {opt.get('opt_cost', 0):.4f}")
                 print(f"  Opt.Acc: {opt.get('opt_acc', 0):.4f}")
         else:
