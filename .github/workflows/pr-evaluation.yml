@@ -82,8 +82,8 @@ jobs:
           elif [[ "$ENTRY_COUNT" -eq 809 ]]; then
             SPLIT="sub_10"
           else
-            echo "Warning: Unexpected prediction file size ($ENTRY_COUNT entries). Defaulting to sub_10." >&2
-            SPLIT="sub_10"
+            echo "Warning: Unexpected prediction file size ($ENTRY_COUNT entries). Defaulting to full." >&2
+            SPLIT="full"
           fi
           echo "split=$SPLIT" >> "$GITHUB_OUTPUT"
 
