@@ -34,6 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           # Compare against the upstream base branch
+          # This ensures each router submission is evaluated independently
           BASE_REF="${{ github.event.pull_request.base.ref }}"
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
 
@@ -52,6 +53,7 @@ jobs:
           fi
 
           # Compare against base to show only changes in this PR
+          # Use three-dot diff to show changes from merge-base to HEAD (only PR changes)
           CHANGED_FILES=$(git diff --name-status "$BASE_SHA"...HEAD -- router_inference/predictions/*.json 2>&1 | awk '$1 == "A" || $1 == "M" {print $2}')
           if [[ -z "$CHANGED_FILES" ]]; then
             echo "No changed prediction file detected; skipping evaluation."
@@ -66,7 +68,7 @@ jobs:
           ROUTER_NAME=$(basename "$CHANGED_FILES" .json)
           echo "router=$ROUTER_NAME" >> "$GITHUB_OUTPUT"
 
-          # Detect split based on prediction file size (from PR)
+          # Detect split based on prediction file size (from PR branch)
           PREDICTION_FILE="router_inference/predictions/${ROUTER_NAME}.json"
           if [[ ! -f "$PREDICTION_FILE" ]]; then
             echo "Error: Prediction file not found at $PREDICTION_FILE" >&2
@@ -122,6 +124,7 @@ jobs:
           ROUTERARENA_DATASET_DIR: ${{ github.workspace }}/dataset
         run: |
           set -euo pipefail
+          # Uses base repo's evaluation script (safe - not from PR)
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
           uv run python automation/process_pr_submission.py \
             --pr "${{ github.event.pull_request.number }}" \
@@ -157,8 +160,8 @@ jobs:
                 comment += `| **RouterArena Score** | ${metrics.arena_score.toFixed(4)} |\n`;
                 comment += `| **Accuracy** | ${(metrics.accuracy * 100).toFixed(2)}% |\n`;
                 comment += `| **Total Cost** | $${metrics.total_cost.toFixed(6)} |\n`;
-                comment += `| **Avg Cost per Query** | ${metrics.avg_cost_per_query.toFixed(6)} |\n`;
-                comment += `| **Avg Cost per 1K Queries** | ${metrics.avg_cost_per_1000.toFixed(4)} |\n`;
+                comment += `| **Avg Cost per Query** | $${metrics.avg_cost_per_query.toFixed(6)} |\n`;
+                comment += `| **Avg Cost per 1K Queries** | $${metrics.avg_cost_per_1000.toFixed(4)} |\n`;
                 comment += `| **Number of Queries** | ${metrics.num_queries} |\n`;
               } else {
                 // Fallback: try to parse from evaluation output
