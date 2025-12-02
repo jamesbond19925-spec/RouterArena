@@ -1,0 +1,12 @@
+{
+    "pipeline_params": {
+        "router_name": "test-glm4air-optimality",
+        "models": [
+            "glm-4-air",
+            "gpt-4o-mini",
+            "claude-3-haiku-20240307",
+            "gemini-2.0-flash-001",
+            "mistral-medium"
+        ]
+    }
+}
